@@ -2916,7 +2916,7 @@ export const LecturerPortal: React.FC<IctUserPortalProps> = ({ activeTab, onSele
           <div className="bg-white rounded-2xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl max-h-[95vh] overflow-y-auto">
             <ResultSlip
               student={selectedStudentForSlip}
-              results={results.filter(r => r.studentId === selectedStudentForSlip.id)}
+              results={results.filter(r => r.studentId === selectedStudentForSlip.id && r.session === selectedSession && r.semester === selectedSemester)}
               summary={computeStudentSemesterSummary(selectedStudentForSlip.id, selectedSession, selectedSemester)}
               signatures={signatures}
               session={selectedSession}

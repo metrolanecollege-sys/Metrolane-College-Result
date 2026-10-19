@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
-import { MetrolaneLogo } from '../common/MetrolaneLogo';
+import { MetrolaneLogo, getMetrolaneLogoDataUrl } from '../common/MetrolaneLogo';
 import { ResultScore, StudentRecord, DigitalSignature, SemesterResultSummary } from '../../types';
+import { computeGrade } from '../../utils/academic';
 import { Printer, Download, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
@@ -32,11 +33,27 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
   const refCode = `MET-${student.matricNumber.replace(/\//g, '')}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
   const currentDate = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY
 
+  // Filter results: ensure only courses belonging to the current semester and session are included
+  const semesterResults = results.filter(r => {
+    if (r.semester && r.semester !== semester) return false;
+    if (r.session && session && r.session !== session) return false;
+    return true;
+  });
+
+  // Calculate current semester credit units and quality points strictly for this semester result
+  const currentSemesterUnits = semesterResults.reduce((acc, r) => acc + (r.creditUnit || 0), 0);
+  const currentSemesterQP = semesterResults.reduce((acc, r) => {
+    const total = Number(r.totalScore || (Number(r.caScore || 0) + Number(r.examScore || 0)));
+    const gp = typeof r.gradePoint === 'number' ? r.gradePoint : computeGrade(total).gradePoint;
+    return acc + parseFloat(((r.creditUnit || 0) * gp).toFixed(2));
+  }, 0);
+  const currentSemesterGPA = currentSemesterUnits > 0 ? parseFloat((currentSemesterQP / currentSemesterUnits).toFixed(2)) : (summary.gpa || 0.00);
+
   const handlePrint = () => {
     window.print();
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     // Generate clean vectorized PDF using jsPDF
     const doc = new jsPDF({
       orientation: 'portrait',
@@ -48,81 +65,91 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
 
     // Top Header Banner
     doc.setFillColor(244, 123, 32); // #F47B20
-    doc.rect(0, 0, pageWidth, 8, 'F');
+    doc.rect(0, 0, pageWidth, 7, 'F');
+
+    // School Logo - dynamically embedded onto PDF
+    try {
+      const logoDataUrl = await getMetrolaneLogoDataUrl();
+      if (logoDataUrl) {
+        doc.addImage(logoDataUrl, 'PNG', pageWidth / 2 - 12, 10, 24, 24);
+      }
+    } catch (e) {
+      console.warn('Could not render logo to PDF:', e);
+    }
 
     // Title & Institution
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
+    doc.setFontSize(14);
     doc.setTextColor(26, 26, 46); // #1A1A2E
-    doc.text('METROLANE COLLEGE OF HEALTH, SCIENCE & TECHNOLOGY', pageWidth / 2, 22, { align: 'center' });
+    doc.text('METROLANE COLLEGE OF HEALTH, SCIENCE & TECHNOLOGY', pageWidth / 2, 38, { align: 'center' });
 
     doc.setFont('helvetica', 'italic');
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setTextColor(117, 117, 117);
-    doc.text('"Compassion in Health, Precision in Science, Innovation in Technology"', pageWidth / 2, 28, { align: 'center' });
+    doc.text('"Compassion in Health, Precision in Science, Innovation in Technology"', pageWidth / 2, 43, { align: 'center' });
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
+    doc.setFontSize(13);
     doc.setTextColor(232, 96, 28);
-    doc.text('OFFICIAL STATEMENT OF RESULT', pageWidth / 2, 38, { align: 'center' });
+    doc.text('OFFICIAL SEMESTER RESULT', pageWidth / 2, 51, { align: 'center' });
 
     // Thin separator
     doc.setDrawColor(200, 200, 200);
-    doc.line(15, 42, pageWidth - 15, 42);
+    doc.line(15, 55, pageWidth - 15, 55);
 
     // Student Info Box
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setTextColor(33, 33, 33);
     doc.setFont('helvetica', 'bold');
-    doc.text('STUDENT INFORMATION', 15, 48);
+    doc.text('STUDENT INFORMATION', 15, 61);
 
     doc.setFont('helvetica', 'normal');
-    doc.text(`Full Name: ${student.firstName} ${student.middleName || ''} ${student.lastName}`.trim(), 15, 54);
-    doc.text(`Matriculation No: ${student.matricNumber}`, 15, 60);
-    doc.text(`Programme: ${student.programme}`, 15, 66);
-    doc.text(`Department: ${student.department}`, 15, 72);
+    doc.text(`Full Name: ${student.firstName} ${student.middleName || ''} ${student.lastName}`.trim(), 15, 67);
+    doc.text(`Matriculation No: ${student.matricNumber}`, 15, 73);
+    doc.text(`Programme: ${student.programme}`, 15, 79);
+    doc.text(`Department: ${student.department}`, 15, 85);
 
-    doc.text(`Academic Level: ${student.level}`, 130, 54);
-    doc.text(`Academic Session: ${session}`, 130, 60);
-    doc.text(`Semester: ${semester}`, 130, 66);
-    doc.text(`Date Issued: ${currentDate}`, 130, 72);
+    doc.text(`Academic Level: ${student.level}`, 130, 67);
+    doc.text(`Academic Session: ${session}`, 130, 73);
+    doc.text(`Semester: ${semester}`, 130, 79);
+    doc.text(`Date Issued: ${currentDate}`, 130, 85);
 
-    // Results Table
-    let startY = 82;
+    // Results Table: S/N | Course Code | Course Title | CU | Score | Grade | GP
+    let startY = 92;
     doc.setFillColor(26, 26, 46);
-    doc.rect(15, startY, pageWidth - 30, 8, 'F');
+    doc.rect(15, startY, pageWidth - 30, 7.5, 'F');
 
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setTextColor(255, 255, 255);
-    doc.text('S/N', 18, startY + 5.5);
-    doc.text('Course Code', 28, startY + 5.5);
-    doc.text('Course Title', 58, startY + 5.5);
-    doc.text('CU', 120, startY + 5.5);
-    doc.text('CA', 135, startY + 5.5);
-    doc.text('Exam', 150, startY + 5.5);
-    doc.text('Total', 165, startY + 5.5);
-    doc.text('Grade', 180, startY + 5.5);
+    doc.text('S/N', 18, startY + 5);
+    doc.text('Course Code', 28, startY + 5);
+    doc.text('Course Title', 60, startY + 5);
+    doc.text('CU', 130, startY + 5);
+    doc.text('Score', 145, startY + 5);
+    doc.text('Grade', 165, startY + 5);
+    doc.text('GP', 182, startY + 5);
 
-    startY += 8;
+    startY += 7.5;
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(33, 33, 33);
 
-    results.forEach((res, index) => {
-      const rowY = startY + (index * 8);
+    semesterResults.forEach((res, index) => {
+      const rowY = startY + (index * 7.5);
       // Alternating row background
       if (index % 2 === 1) {
         doc.setFillColor(245, 245, 245);
-        doc.rect(15, rowY, pageWidth - 30, 8, 'F');
+        doc.rect(15, rowY, pageWidth - 30, 7.5, 'F');
       }
 
-      doc.text(String(index + 1), 18, rowY + 5.5);
-      doc.text(res.courseCode, 28, rowY + 5.5);
-      doc.text(res.courseTitle.slice(0, 32), 58, rowY + 5.5);
-      doc.text(String(res.creditUnit), 122, rowY + 5.5);
-      doc.text(String(res.caScore), 137, rowY + 5.5);
-      doc.text(String(res.examScore), 152, rowY + 5.5);
-      doc.text(String(res.totalScore), 167, rowY + 5.5);
+      const totalScore = Number(res.totalScore || (Number(res.caScore || 0) + Number(res.examScore || 0)));
+      const gp = typeof res.gradePoint === 'number' ? res.gradePoint : computeGrade(totalScore).gradePoint;
+
+      doc.text(String(index + 1), 18, rowY + 5);
+      doc.text(res.courseCode, 28, rowY + 5);
+      doc.text(res.courseTitle.slice(0, 36), 60, rowY + 5);
+      doc.text(String(res.creditUnit), 132, rowY + 5);
+      doc.text(String(totalScore), 147, rowY + 5);
       
       doc.setFont('helvetica', 'bold');
       if (res.grade === 'F') {
@@ -130,13 +157,15 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
       } else {
         doc.setTextColor(33, 33, 33);
       }
-      doc.text(res.grade, 182, rowY + 5.5);
+      doc.text(res.grade, 167, rowY + 5);
+      doc.setTextColor(232, 96, 28);
+      doc.text(gp.toFixed(2), 182, rowY + 5);
 
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(33, 33, 33);
     });
 
-    const summaryY = startY + (results.length * 8) + 6;
+    const summaryY = startY + (semesterResults.length * 7.5) + 5;
     doc.setDrawColor(244, 123, 32);
     doc.setFillColor(254, 243, 199);
     doc.rect(15, summaryY, pageWidth - 30, 14, 'FD');
@@ -144,11 +173,11 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.5);
     doc.setTextColor(26, 26, 46);
-    doc.text(`Total Units: ${summary.totalCreditUnitsCumulative}`, 16, summaryY + 5.5);
-    doc.text(`Total QP: ${summary.totalQualityPointsCumulative.toFixed(1)}`, 48, summaryY + 5.5);
-    doc.text(`Prev CGPA: ${summary.previousCgpaText || (summary.previousCgpa ? summary.previousCgpa.toFixed(2) : 'N/A')}`, 80, summaryY + 5.5);
-    doc.text(`Sem GPA: ${summary.gpa.toFixed(2)}`, 128, summaryY + 5.5);
-    doc.text(`Cum CGPA: ${summary.cgpa.toFixed(2)}`, 164, summaryY + 5.5);
+    doc.text(`Total Units: ${currentSemesterUnits}`, 16, summaryY + 5.5);
+    doc.text(`Total QP: ${currentSemesterQP.toFixed(1)}`, 50, summaryY + 5.5);
+    doc.text(`Prev CGPA: ${summary.previousCgpaText || (summary.previousCgpa ? summary.previousCgpa.toFixed(2) : 'N/A')}`, 85, summaryY + 5.5);
+    doc.text(`Sem GPA: ${currentSemesterGPA.toFixed(2)}`, 130, summaryY + 5.5);
+    doc.text(`Cum CGPA: ${summary.cgpa.toFixed(2)}`, 165, summaryY + 5.5);
 
     doc.setFontSize(8);
     doc.setTextColor(232, 96, 28);
@@ -232,9 +261,9 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
     // Security Footer
     doc.setFontSize(7.5);
     doc.setTextColor(130, 130, 130);
-    doc.text(`Security Verification Ref: ${refCode} | Metrolane College Result Portal | Printed on: ${new Date().toLocaleString('en-GB')}`, pageWidth / 2, 285, { align: 'center' });
+    doc.text(`Security Verification Ref: ${refCode} | Metrolane College Semester Result | Printed on: ${new Date().toLocaleString('en-GB')}`, pageWidth / 2, 285, { align: 'center' });
 
-    doc.save(`Metrolane_Result_Slip_${student.matricNumber.replace(/\//g, '_')}.pdf`);
+    doc.save(`Metrolane_Semester_Result_${student.matricNumber.replace(/\//g, '_')}.pdf`);
   };
 
   return (
@@ -244,19 +273,19 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
         <div className="bg-gray-900 text-white px-6 py-3.5 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-[#F47B20]" />
-            <span className="font-semibold text-sm">Official Academic Document Preview</span>
+            <span className="font-semibold text-sm">Official Semester Result Preview</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="px-3.5 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20 text-white rounded-lg transition flex items-center gap-1.5"
+              className="px-3.5 py-1.5 text-xs font-semibold bg-white/10 hover:bg-white/20 text-white rounded-lg transition flex items-center gap-1.5 cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               Print
             </button>
             <button
               onClick={handleDownloadPDF}
-              className="px-4 py-1.5 text-xs font-semibold bg-[#F47B20] hover:bg-[#E8601C] text-white rounded-lg shadow-sm transition flex items-center gap-1.5"
+              className="px-4 py-1.5 text-xs font-semibold bg-[#F47B20] hover:bg-[#E8601C] text-white rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer"
             >
               <Download className="w-4 h-4" />
               Download Official PDF
@@ -264,7 +293,7 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
             {onClose && (
               <button
                 onClick={onClose}
-                className="ml-2 text-gray-400 hover:text-white text-lg font-bold px-2"
+                className="ml-2 text-gray-400 hover:text-white text-lg font-bold px-2 cursor-pointer"
               >
                 ✕
               </button>
@@ -282,10 +311,10 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
             <MetrolaneLogo size={420} watermark />
           </div>
 
-          {/* School Header */}
+          {/* School Header with School Logo */}
           <div className="flex flex-col items-center text-center pb-6 border-b-2 border-[#1A1A2E]/20 relative z-10">
             <div className="mb-2">
-              <MetrolaneLogo size={85} />
+              <MetrolaneLogo size={90} />
             </div>
             <h1 className="text-xl md:text-2xl font-black text-[#1A1A2E] tracking-tight uppercase">
               Metrolane College of Health, Science &amp; Technology
@@ -295,7 +324,7 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
             </p>
             <div className="mt-3 px-6 py-1 bg-[#F47B20]/10 border border-[#F47B20]/30 rounded-full inline-block">
               <span className="text-xs md:text-sm font-black uppercase text-[#E8601C] tracking-widest">
-                Statement of Result
+                Semester Result
               </span>
             </div>
           </div>
@@ -338,42 +367,54 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
             </div>
           </div>
 
-          {/* Results Table */}
+          {/* Results Table: S/N | Course Code | Course Title | CU | Score | Grade | GP */}
           <div className="my-6 overflow-x-auto relative z-10">
-            <table className="w-full text-xs md:text-sm text-left border-collapse">
-              <thead>
-                <tr className="bg-[#1A1A2E] text-white uppercase text-[11px] tracking-wider">
-                  <th className="py-2.5 px-3 rounded-l-md">S/N</th>
-                  <th className="py-2.5 px-3">Course Code</th>
-                  <th className="py-2.5 px-3">Course Title</th>
-                  <th className="py-2.5 px-3 text-center">CU</th>
-                  <th className="py-2.5 px-3 text-center">CA (30)</th>
-                  <th className="py-2.5 px-3 text-center">Exam (70)</th>
-                  <th className="py-2.5 px-3 text-center">Total (100)</th>
-                  <th className="py-2.5 px-3 text-center rounded-r-md">Grade</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {results.map((r, i) => (
-                  <tr key={r.id || i} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
-                    <td className="py-2 px-3 text-gray-500 font-medium">{i + 1}</td>
-                    <td className="py-2 px-3 font-bold text-gray-800">{r.courseCode}</td>
-                    <td className="py-2 px-3 font-medium text-gray-700">{r.courseTitle}</td>
-                    <td className="py-2 px-3 text-center font-bold text-gray-800">{r.creditUnit}</td>
-                    <td className="py-2 px-3 text-center text-gray-600">{r.caScore}</td>
-                    <td className="py-2 px-3 text-center text-gray-600">{r.examScore}</td>
-                    <td className="py-2 px-3 text-center font-bold text-gray-900">{r.totalScore}</td>
-                    <td className="py-2 px-3 text-center font-black">
-                      <span className={`px-2 py-0.5 rounded text-xs ${
-                        r.grade === 'F' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'
-                      }`}>
-                        {r.grade}
-                      </span>
-                    </td>
+            {semesterResults.length === 0 ? (
+              <div className="p-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                <p className="text-sm font-semibold text-gray-600">No course results registered for this semester ({semester}, {session}).</p>
+                <p className="text-xs text-gray-400 mt-1">Previous cumulative CGPA is preserved in records.</p>
+              </div>
+            ) : (
+              <table className="w-full text-xs md:text-sm text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#1A1A2E] text-white uppercase text-[11px] tracking-wider">
+                    <th className="py-2.5 px-3 rounded-l-md">S/N</th>
+                    <th className="py-2.5 px-3">Course Code</th>
+                    <th className="py-2.5 px-3">Course Title</th>
+                    <th className="py-2.5 px-3 text-center">CU</th>
+                    <th className="py-2.5 px-3 text-center">Score</th>
+                    <th className="py-2.5 px-3 text-center">Grade</th>
+                    <th className="py-2.5 px-3 text-center rounded-r-md">GP</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {semesterResults.map((r, i) => {
+                    const totalScore = Number(r.totalScore || (Number(r.caScore || 0) + Number(r.examScore || 0)));
+                    const gp = typeof r.gradePoint === 'number' ? r.gradePoint : computeGrade(totalScore).gradePoint;
+
+                    return (
+                      <tr key={r.id || i} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
+                        <td className="py-2 px-3 text-gray-500 font-medium">{i + 1}</td>
+                        <td className="py-2 px-3 font-bold text-gray-800">{r.courseCode}</td>
+                        <td className="py-2 px-3 font-medium text-gray-700">{r.courseTitle}</td>
+                        <td className="py-2 px-3 text-center font-bold text-gray-800">{r.creditUnit}</td>
+                        <td className="py-2 px-3 text-center font-bold text-gray-900">{totalScore}</td>
+                        <td className="py-2 px-3 text-center font-black">
+                          <span className={`px-2 py-0.5 rounded text-xs ${
+                            r.grade === 'F' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {r.grade}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-center font-mono font-bold text-[#E8601C]">
+                          {gp.toFixed(2)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
 
           {/* Three Core Academic Performance Summary Cards */}
@@ -393,9 +434,9 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
               {/* Current Semester GPA */}
               <div className="bg-white p-3 rounded-lg border border-orange-200 shadow-2xs">
                 <span className="text-[10px] font-bold uppercase text-[#E8601C] block">Current Semester GPA</span>
-                <span className="text-xl font-black text-[#E8601C] font-mono mt-0.5 block">{summary.gpa.toFixed(2)}</span>
+                <span className="text-xl font-black text-[#E8601C] font-mono mt-0.5 block">{currentSemesterGPA.toFixed(2)}</span>
                 <span className="text-[10px] text-gray-500 block mt-0.5">
-                  {summary.totalCreditUnits} Credit Units • {summary.totalQualityPoints.toFixed(1)} QP
+                  {currentSemesterUnits} Credit Units • {currentSemesterQP.toFixed(1)} QP
                 </span>
               </div>
 
@@ -412,7 +453,7 @@ export const ResultSlip: React.FC<ResultSlipProps> = ({
                 Academic Standing: <strong className="text-emerald-700 uppercase">{summary.remark === 'Pass' ? 'Good Standing' : summary.remark}</strong>
               </span>
               <span className="text-gray-700">
-                Total Attempted: <strong>{summary.totalCreditUnitsCumulative} Units</strong> (<strong>{summary.totalQualityPointsCumulative.toFixed(1)} Total QP</strong>)
+                Current Semester Units: <strong>{currentSemesterUnits} Units</strong> ({currentSemesterQP.toFixed(1)} Semester QP)
               </span>
             </div>
           </div>

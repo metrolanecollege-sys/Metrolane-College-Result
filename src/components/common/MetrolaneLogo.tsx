@@ -181,3 +181,48 @@ export const MetrolaneLogo: React.FC<MetrolaneLogoProps> = ({
     </div>
   );
 };
+
+export async function getMetrolaneLogoDataUrl(): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+        <circle cx="120" cy="120" r="114" fill="#475569" stroke="#CBD5E1" stroke-width="4"/>
+        <circle cx="120" cy="120" r="102" fill="#334155" stroke="#CBD5E1" stroke-width="4"/>
+        <circle cx="120" cy="120" r="92" fill="#E8601C" stroke="#FFFFFF" stroke-width="2"/>
+        <text x="120" y="58" fill="#FFFFFF" font-size="16" font-family="Arial, sans-serif" font-weight="900" text-anchor="middle" letter-spacing="3">METROLANE</text>
+        <text x="120" y="196" fill="#FFFFFF" font-size="9" font-family="Arial, sans-serif" font-weight="700" text-anchor="middle" letter-spacing="1">COLLEGE OF HEALTH &amp; TECH</text>
+        <circle cx="120" cy="120" r="54" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="4"/>
+        <path d="M 66 120 A 54 54 0 0 1 120 66 L 120 120 Z" fill="#334155"/>
+        <path d="M 120 120 L 120 174 A 54 54 0 0 1 66 120 Z" fill="#FFFFFF"/>
+        <path d="M 120 66 A 54 54 0 0 1 174 120 L 120 120 Z" fill="#FFFFFF"/>
+        <path d="M 120 120 L 174 120 A 54 54 0 0 1 120 174 Z" fill="#334155"/>
+        <line x1="120" y1="66" x2="120" y2="174" stroke="#CBD5E1" stroke-width="3"/>
+        <line x1="66" y1="120" x2="174" y2="120" stroke="#CBD5E1" stroke-width="3"/>
+        <polygon points="93,82 107,89 93,96 79,89" fill="#FFFFFF"/>
+        <path d="M 147 91 C 147 86 142 85 139 88 C 136 85 131 86 131 91 C 131 97 139 102 139 102 C 139 102 147 97 147 91 Z" fill="#E8601C"/>
+        <polygon points="87,135 101,135 105,155 83,155" fill="#E8601C"/>
+        <circle cx="140" cy="144" r="10" fill="none" stroke="#E8601C" stroke-width="3"/>
+        <circle cx="120" cy="120" r="5" fill="#CBD5E1"/>
+      </svg>`;
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 240;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, 240, 240);
+          resolve(canvas.toDataURL('image/png'));
+        } else {
+          resolve('');
+        }
+      };
+      img.onerror = () => {
+        resolve(`data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`);
+      };
+      img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+    } catch {
+      resolve('');
+    }
+  });
+}

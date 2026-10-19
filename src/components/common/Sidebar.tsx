@@ -98,6 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'student_registration', label: 'Student Registration', icon: UserPlus },
           { id: 'student_management', label: 'Student Management', icon: Users },
+          { id: 'user_credentials', label: 'User Credentials', icon: KeyRound },
           { id: 'course_management', label: 'Course Management', icon: BookOpen },
           { id: 'course_registration', label: 'Course Registration', icon: ClipboardList },
           { id: 'result_entry', label: 'Result Entry', icon: FileSpreadsheet },
@@ -112,7 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       case 'student':
         return [
           { id: 'dashboard', label: 'My Dashboard', icon: LayoutDashboard },
-          { id: 'check_result', label: 'Check Result (PIN)', icon: KeyRound },
+          { id: 'check_result', label: 'Check Result', icon: Award },
           { id: 'course_registration', label: 'Course Registration', icon: ClipboardList },
           { id: 'result_slips', label: 'Result Slips & Transcripts', icon: FileText },
           { id: 'academic_profile', label: 'Student Profile', icon: GraduationCap },

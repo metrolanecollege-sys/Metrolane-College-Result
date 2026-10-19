@@ -43,9 +43,12 @@ interface AdminPortalProps {
 }
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({ activeTab, onSelectTab }) => {
-  const { currentUser, switchRole, resetPassword } = useAuth();
+  const { currentUser, switchRole, resetPassword, updateUserCredentials } = useAuth();
   const [resetPassUser, setResetPassUser] = useState<UserProfile | null>(null);
+  const [adminNewEmail, setAdminNewEmail] = useState('');
+  const [adminNewMatric, setAdminNewMatric] = useState('');
   const [adminNewPass, setAdminNewPass] = useState('');
+  const [showAdminPass, setShowAdminPass] = useState(false);
   const { 
     students, 
     courses, 
@@ -798,13 +801,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeTab, onSelectTab
                           type="button"
                           onClick={() => {
                             setResetPassUser(u);
+                            setAdminNewEmail(u.email);
+                            setAdminNewMatric('');
                             setAdminNewPass('');
+                            setShowAdminPass(false);
                           }}
                           className="px-2.5 py-1 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition inline-flex items-center gap-1 cursor-pointer"
-                          title="Reset this user's password"
+                          title="Change this user's login credentials (Email / Password)"
                         >
                           <KeyRound className="w-3 h-3 text-[#F47B20]" />
-                          Reset Pass
+                          Credentials
                         </button>
                         <button
                           type="button"
@@ -825,47 +831,121 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeTab, onSelectTab
             </table>
           </div>
 
-          {/* Super Admin Reset Password Modal */}
+          {/* Super Admin Manage Credentials Modal */}
           {resetPassUser && (
             <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl animate-in fade-in zoom-in-95">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl animate-in fade-in zoom-in-95">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <KeyRound className="w-5 h-5 text-[#F47B20]" />
-                    <h4 className="font-bold text-gray-900 text-sm">Reset Password for User</h4>
+                    <h4 className="font-bold text-gray-900 text-sm">Change Login Credentials</h4>
                   </div>
-                  <button onClick={() => setResetPassUser(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+                  <button onClick={() => setResetPassUser(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
                 </div>
                 <p className="text-xs text-gray-600 mb-3">
-                  Set a new secure password for <strong>{resetPassUser.fullName}</strong> ({resetPassUser.email}).
+                  Update login credentials for <strong>{resetPassUser.fullName}</strong> ({resetPassUser.role.replace('_', ' ').toUpperCase()}).
                 </p>
-                <div className="space-y-3">
-                  <input
-                    type="password"
-                    placeholder="Enter new password (min 6 chars)"
-                    value={adminNewPass}
-                    onChange={(e) => setAdminNewPass(e.target.value)}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-xs outline-none focus:border-[#F47B20]"
-                  />
-                  <div className="flex justify-end gap-2 pt-2">
+                
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Login Email / Username</label>
+                    <input
+                      type="email"
+                      placeholder="e.g. user@metrolane.edu.ng"
+                      value={adminNewEmail}
+                      onChange={(e) => setAdminNewEmail(e.target.value)}
+                      className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-xs outline-none focus:border-[#F47B20] focus:bg-white"
+                    />
+                  </div>
+
+                  {resetPassUser.role === 'student' && (
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1">Matriculation Number</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 26/MET/CHT/001"
+                        value={adminNewMatric}
+                        onChange={(e) => setAdminNewMatric(e.target.value)}
+                        className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-xs font-mono outline-none focus:border-[#F47B20] focus:bg-white"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-gray-700">New Password</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const rand = `Metro@${Math.floor(1000 + Math.random() * 9000)}`;
+                          setAdminNewPass(rand);
+                          setShowAdminPass(true);
+                        }}
+                        className="text-[10px] text-[#F47B20] hover:underline font-bold cursor-pointer"
+                      >
+                        Generate Random
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showAdminPass ? 'text' : 'password'}
+                        placeholder="Leave blank to keep current, or min 6 chars"
+                        value={adminNewPass}
+                        onChange={(e) => setAdminNewPass(e.target.value)}
+                        className="w-full p-2.5 pr-14 bg-gray-50 border border-gray-300 rounded-lg text-xs outline-none focus:border-[#F47B20] focus:bg-white font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminPass(!showAdminPass)}
+                        className="absolute right-2.5 top-2.5 text-[10px] text-gray-500 hover:text-gray-700 font-bold cursor-pointer"
+                      >
+                        {showAdminPass ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                     <button
                       type="button"
                       onClick={() => setResetPassUser(null)}
-                      className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"
+                      className="px-3.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
-                      disabled={!adminNewPass || adminNewPass.length < 6}
+                      disabled={!adminNewEmail.trim() || (adminNewPass.length > 0 && adminNewPass.length < 6)}
                       onClick={async () => {
-                        const res = await resetPassword(resetPassUser.email, adminNewPass);
+                        const targetEmail = adminNewEmail.trim();
+                        const res = await updateUserCredentials(
+                          resetPassUser.uid || resetPassUser.email,
+                          targetEmail,
+                          adminNewPass.trim() || undefined,
+                          {
+                            matricNumber: adminNewMatric.trim() || undefined,
+                            fullName: resetPassUser.fullName,
+                            role: resetPassUser.role
+                          }
+                        );
+
+                        // Also update in DataContext state
+                        await updateUser(resetPassUser.uid, {
+                          email: targetEmail
+                        });
+
+                        if (resetPassUser.role === 'student') {
+                          await updateStudent(resetPassUser.uid, {
+                            email: targetEmail,
+                            ...(adminNewMatric.trim() ? { matricNumber: adminNewMatric.trim() } : {})
+                          });
+                        }
+
                         setResetPassUser(null);
-                        showAlert(res.message);
+                        showAlert(`Credentials updated successfully! User can now sign in using ${targetEmail}${adminNewPass ? ` with password: ${adminNewPass}` : ''}.`);
                       }}
-                      className="px-4 py-1.5 bg-[#F47B20] hover:bg-[#E8601C] text-white font-bold text-xs rounded-lg disabled:opacity-50"
+                      className="px-4 py-1.5 bg-[#F47B20] hover:bg-[#E8601C] text-white font-bold text-xs rounded-lg disabled:opacity-50 cursor-pointer shadow-xs"
                     >
-                      Save Password
+                      Save Credentials
                     </button>
                   </div>
                 </div>
@@ -1130,6 +1210,28 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeTab, onSelectTab
                         </button>
                         <button
                           type="button"
+                          onClick={() => {
+                            setResetPassUser({
+                              uid: std.id,
+                              email: std.email,
+                              fullName: `${std.firstName} ${std.lastName}`,
+                              role: 'student',
+                              isActive: std.status === 'active',
+                              createdAt: std.createdAt
+                            });
+                            setAdminNewEmail(std.email);
+                            setAdminNewMatric(std.matricNumber);
+                            setAdminNewPass('');
+                            setShowAdminPass(false);
+                          }}
+                          className="px-2.5 py-1 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition inline-flex items-center gap-1 cursor-pointer"
+                          title="Change Student Login Credentials"
+                        >
+                          <KeyRound className="w-3 h-3 text-[#F47B20]" />
+                          Credentials
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setSelectedStudentModal(std)}
                           className="px-2.5 py-1 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md transition cursor-pointer"
                         >
@@ -1371,7 +1473,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({ activeTab, onSelectTab
               Authorized Signatory Digital Profiles
             </h3>
             <p className="text-xs text-gray-500 mt-1">
-              Official signatures dynamically appear on students' printable Statement of Result and Transcripts.
+              Official signatures dynamically appear on students' printable Semester Result and Transcripts.
             </p>
           </div>
 

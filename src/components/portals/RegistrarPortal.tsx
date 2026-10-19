@@ -315,10 +315,10 @@ export const RegistrarPortal: React.FC<RegistrarPortalProps> = ({ activeTab, onS
                         <button
                           type="button"
                           onClick={() => setSelectedStudentForSlip(std)}
-                          className="px-3 py-1 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold rounded-md transition inline-flex items-center gap-1"
+                          className="px-3 py-1 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold rounded-md transition inline-flex items-center gap-1 cursor-pointer"
                         >
                           <Eye className="w-3 h-3" />
-                          Statement of Result
+                          Semester Result
                         </button>
                       </td>
                     </tr>
@@ -337,7 +337,7 @@ export const RegistrarPortal: React.FC<RegistrarPortalProps> = ({ activeTab, onS
             <div>
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-emerald-700" />
-                Official Statement of Result &amp; Transcript Generator
+                Official Semester Result &amp; Transcript Generator
               </h3>
               <p className="text-xs text-gray-500">
                 Generate authenticated result slips with official watermark and all 3 digital signatures.
@@ -470,7 +470,7 @@ export const RegistrarPortal: React.FC<RegistrarPortalProps> = ({ activeTab, onS
               Verified Published Results Database
             </h3>
             <p className="text-[11px] text-gray-500">
-              Exam Director and Senate endorsed results visible on student scratch cards.
+              Exam Director and Senate endorsed results visible on student portal.
             </p>
           </div>
 
@@ -699,7 +699,7 @@ export const RegistrarPortal: React.FC<RegistrarPortalProps> = ({ activeTab, onS
       {selectedStudentForSlip && (
         <ResultSlip
           student={selectedStudentForSlip}
-          results={results.filter(r => r.studentId === selectedStudentForSlip.id && r.status === 'published')}
+          results={results.filter(r => r.studentId === selectedStudentForSlip.id && r.session === settings.currentSession && r.semester === settings.currentSemester && r.status === 'published')}
           summary={computeStudentSemesterSummary(selectedStudentForSlip.id, settings.currentSession, settings.currentSemester)}
           signatures={signatures}
           session={settings.currentSession}

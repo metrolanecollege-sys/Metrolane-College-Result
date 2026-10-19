@@ -3,10 +3,10 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { ResultSlip } from '../documents/ResultSlip';
 import { StudentRecord } from '../../types';
-import { computeClassification } from '../../utils/academic';
+import { computeClassification, computeGrade } from '../../utils/academic';
 import { 
   GraduationCap, 
-  KeyRound, 
+  Search, 
   ClipboardList, 
   FileText, 
   CheckCircle2, 
@@ -18,7 +18,10 @@ import {
   Sparkles,
   BookOpen,
   TrendingUp,
-  UserCheck
+  UserCheck,
+  Award,
+  Filter,
+  RotateCcw
 } from 'lucide-react';
 
 interface StudentPortalProps {
@@ -35,8 +38,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
     registerStudentCourses, 
     dropStudentCourse, 
     results, 
-    pins, 
-    verifyAndRedeemPin, 
+    sessions,
     settings, 
     signatures, 
     computeStudentSemesterSummary 
@@ -56,14 +58,34 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
     onSelectTab?.(tabId);
   };
 
-  // PIN Result checking form
-  const [scratchPin, setScratchPin] = useState('');
-  const [pinSerial, setPinSerial] = useState('');
+  // Result checking criteria & state based strictly on Matriculation Number & Academic Criteria
+  const [searchMatric, setSearchMatric] = useState(currentStudent?.matricNumber || '26/MET/CHT/001');
   const [selectedSession, setSelectedSession] = useState(settings.currentSession);
   const [selectedSemester, setSelectedSemester] = useState<'1st Semester' | '2nd Semester'>(settings.currentSemester);
-  const [pinVerificationResult, setPinVerificationResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [isResultUnlocked, setIsResultUnlocked] = useState(false);
+  const [selectedLevel, setSelectedLevel] = useState<string>('All Levels');
+  const [activeStudent, setActiveStudent] = useState<StudentRecord>(currentStudent);
+  const [searchStatus, setSearchStatus] = useState<{ 
+    type: 'success' | 'warning' | 'error' | 'info'; 
+    message: string; 
+  } | null>(null);
+  const [hasRetrieved, setHasRetrieved] = useState(true);
   const [showSlipModal, setShowSlipModal] = useState(false);
+
+  // Synchronize when current student changes
+  useEffect(() => {
+    if (currentStudent) {
+      setSearchMatric(currentStudent.matricNumber);
+      setActiveStudent(currentStudent);
+    }
+  }, [currentStudent]);
+
+  // Derive target student for results display
+  const targetStudent = activeStudent || currentStudent;
+
+  // Available sessions list
+  const availableSessions = sessions && sessions.length > 0
+    ? sessions.map(s => s.name)
+    : ['2025/2026', '2024/2025', '2023/2024'];
 
   // Course registration selection
   const myRegistrations = courseRegistrations.filter(
@@ -75,27 +97,62 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
   const [selectedCourseIdsToRegister, setSelectedCourseIdsToRegister] = useState<string[]>([]);
   const [regSuccess, setRegSuccess] = useState<string | null>(null);
 
-  // Student results
+  // Student results strictly filtered by studentId / matriculation number and academic criteria
   const studentResults = results.filter(
-    r => r.studentId === currentStudent?.id && r.session === selectedSession && r.semester === selectedSemester && r.status === 'published'
+    r => (r.studentId === targetStudent?.id || (targetStudent?.matricNumber && r.matricNumber.trim().toLowerCase() === targetStudent.matricNumber.trim().toLowerCase())) &&
+         r.session === selectedSession &&
+         r.semester === selectedSemester &&
+         r.status === 'published' &&
+         (selectedLevel === 'All Levels' || r.level === selectedLevel)
   );
 
-  const studentSummary = computeStudentSemesterSummary(currentStudent?.id || '', selectedSession, selectedSemester);
+  const studentSummary = computeStudentSemesterSummary(targetStudent?.id || '', selectedSession, selectedSemester);
 
-  const handleVerifyPin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!scratchPin.trim()) return;
+  const handleRetrieveResults = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanMatric = searchMatric.trim();
+    if (!cleanMatric) {
+      setSearchStatus({
+        type: 'error',
+        message: 'Please enter a valid student Matriculation Number.'
+      });
+      return;
+    }
 
-    const res = await verifyAndRedeemPin(
-      scratchPin, 
-      currentStudent.id, 
-      currentStudent.matricNumber, 
-      selectedSession, 
-      selectedSemester
+    const matched = students.find(
+      s => s.matricNumber.trim().toLowerCase() === cleanMatric.toLowerCase()
     );
-    setPinVerificationResult(res);
-    if (res.success) {
-      setIsResultUnlocked(true);
+
+    if (!matched) {
+      setSearchStatus({
+        type: 'error',
+        message: `No student record found with Matriculation Number "${cleanMatric}". Please check and verify your matriculation number.`
+      });
+      setHasRetrieved(false);
+      return;
+    }
+
+    setActiveStudent(matched);
+    setHasRetrieved(true);
+
+    const matches = results.filter(
+      r => (r.studentId === matched.id || r.matricNumber.trim().toLowerCase() === matched.matricNumber.trim().toLowerCase()) &&
+           r.session === selectedSession &&
+           r.semester === selectedSemester &&
+           r.status === 'published' &&
+           (selectedLevel === 'All Levels' || r.level === selectedLevel)
+    );
+
+    if (matches.length > 0) {
+      setSearchStatus({
+        type: 'success',
+        message: `Results retrieved successfully for ${matched.firstName} ${matched.lastName} (${matched.matricNumber}) — ${selectedSession} ${selectedSemester}.`
+      });
+    } else {
+      setSearchStatus({
+        type: 'warning',
+        message: `No published results found for ${matched.firstName} ${matched.lastName} (${matched.matricNumber}) for ${selectedSession} • ${selectedSemester}${selectedLevel !== 'All Levels' ? ` (${selectedLevel})` : ''}. Results may still be undergoing departmental processing or Senate approval.`
+      });
     }
   };
 
@@ -119,9 +176,6 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
     setRegSuccess(`Successfully enrolled in ${selectedCourseIdsToRegister.length} courses for ${settings.currentSession}.`);
   };
 
-  // Find a sample unused PIN for instant testing convenience
-  const sampleUnusedPin = pins.find(p => !p.isUsed) || pins[0];
-
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -143,10 +197,10 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
           <button
             type="button"
             onClick={() => handleTabChange('check_result')}
-            className="px-4 py-2 bg-white text-gray-900 hover:bg-gray-100 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5"
+            className="px-4 py-2 bg-white text-gray-900 hover:bg-gray-100 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
           >
-            <KeyRound className="w-3.5 h-3.5 text-[#F47B20]" />
-            Check Result (Scratch PIN)
+            <Award className="w-3.5 h-3.5 text-[#F47B20]" />
+            Check Result
           </button>
         </div>
       </div>
@@ -155,7 +209,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
       <div className="bg-white p-2 rounded-xl border border-gray-200 overflow-x-auto flex items-center gap-1 text-xs font-bold shadow-xs">
         {[
           { id: 'dashboard', label: 'My Dashboard', icon: TrendingUp },
-          { id: 'check_result', label: 'Check Result (PIN)', icon: KeyRound },
+          { id: 'check_result', label: 'Check Result', icon: Award },
           { id: 'course_registration', label: 'Course Registration', icon: ClipboardList },
           { id: 'result_slips', label: 'Result Slips & Transcripts', icon: FileText },
           { id: 'academic_profile', label: 'Student Profile', icon: GraduationCap },
@@ -225,16 +279,16 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-between">
               <div>
                 <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                  <KeyRound className="w-4 h-4 text-[#F47B20]" />
+                  <Award className="w-4 h-4 text-[#F47B20]" />
                   Check Semester Results
                 </h4>
                 <p className="text-xs text-gray-500 mt-1">
-                  Have your 16-character scratch PIN ready to view your Continuous Assessment and Examination scores.
+                  Enter your matriculation number and select academic criteria to view your Continuous Assessment and Examination scores.
                 </p>
               </div>
               <button
                 onClick={() => handleTabChange('check_result')}
-                className="mt-4 px-4 py-2 bg-[#F47B20] hover:bg-[#E8601C] text-white font-bold text-xs rounded-xl shadow-xs transition self-start"
+                className="mt-4 px-4 py-2 bg-[#F47B20] hover:bg-[#E8601C] text-white font-bold text-xs rounded-xl shadow-xs transition self-start cursor-pointer"
               >
                 Go to Result Checker →
               </button>
@@ -244,117 +298,170 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
               <div>
                 <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
                   <FileText className="w-4 h-4 text-emerald-600" />
-                  Statement of Result Slip
+                  Semester Result Slip
                 </h4>
                 <p className="text-xs text-gray-500 mt-1">
-                  Download or print your official Statement of Result with College seal and 3 digital signatures.
+                  Download or print your official Semester Result with College seal and 3 digital signatures.
                 </p>
               </div>
               <button
                 onClick={() => setShowSlipModal(true)}
-                className="mt-4 px-4 py-2 bg-[#1A1A2E] hover:bg-[#2D2D44] text-white font-bold text-xs rounded-xl shadow-xs transition self-start"
+                className="mt-4 px-4 py-2 bg-[#1A1A2E] hover:bg-[#2D2D44] text-white font-bold text-xs rounded-xl shadow-xs transition self-start cursor-pointer"
               >
-                Print Statement of Result →
+                Print Semester Result →
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 2. SECTION: CHECK RESULT (SCRATCH PIN) */}
+      {/* 2. SECTION: CHECK RESULT (MATRICULATION NUMBER & ACADEMIC CRITERIA) */}
       {currentView === 'check_result' && (
         <div className="space-y-6 animate-in fade-in">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 max-w-2xl mx-auto">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 max-w-3xl mx-auto">
             <div className="text-center mb-6">
               <div className="w-12 h-12 bg-orange-100 text-[#F47B20] rounded-full flex items-center justify-center mx-auto mb-2">
-                <KeyRound className="w-6 h-6" />
+                <Award className="w-6 h-6" />
               </div>
               <h3 className="text-lg font-black text-gray-900">Online Result Checking Portal</h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Enter your valid 16-character Scratch PIN to view and download your Statement of Result.
+              <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                Retrieve and view official statement of semester results using your Matriculation Number and academic session/semester criteria.
               </p>
             </div>
 
-            {/* Quick Demo Fill Helper */}
-            {sampleUnusedPin && (
-              <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-amber-900 block">Sample Scratch PIN for Testing:</span>
-                  <span className="font-mono font-black text-[#E8601C] text-sm">{sampleUnusedPin.pin}</span>
-                </div>
+            {searchStatus && (
+              <div className={`mb-5 p-3.5 rounded-xl text-xs font-semibold flex items-start gap-2.5 ${
+                searchStatus.type === 'success' 
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+                  : searchStatus.type === 'warning'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {searchStatus.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                )}
+                <div className="flex-1">{searchStatus.message}</div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setScratchPin(sampleUnusedPin.pin);
-                    setPinSerial(sampleUnusedPin.serialNumber);
-                  }}
-                  className="px-3 py-1.5 bg-[#F47B20] hover:bg-[#E8601C] text-white font-bold rounded-lg transition"
+                  onClick={() => setSearchStatus(null)}
+                  className="text-gray-400 hover:text-gray-600 font-bold ml-2 cursor-pointer"
                 >
-                  Auto Fill PIN
+                  ✕
                 </button>
               </div>
             )}
 
-            {pinVerificationResult && (
-              <div className={`mb-4 p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
-                pinVerificationResult.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'
-              }`}>
-                {pinVerificationResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-red-600" />}
-                <span>{pinVerificationResult.message}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleVerifyPin} className="space-y-4 text-xs">
+            <form onSubmit={handleRetrieveResults} className="space-y-4 text-xs">
+              {/* Matriculation Number Input */}
               <div>
-                <label className="font-bold text-gray-700 block mb-1">
-                  16-Digit Result Scratch PIN *
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-bold text-gray-700">
+                    Matriculation Number *
+                  </label>
+                  {currentStudent && searchMatric !== currentStudent.matricNumber && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchMatric(currentStudent.matricNumber);
+                        setActiveStudent(currentStudent);
+                      }}
+                      className="text-[11px] text-[#F47B20] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Use My Matric ({currentStudent.matricNumber})
+                    </button>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
-                  placeholder="MET-XXXX-XXXX-XXXX"
-                  value={scratchPin}
-                  onChange={(e) => setScratchPin(e.target.value)}
-                  className="w-full font-mono font-bold text-sm p-3 bg-[#EEEDF7] rounded-lg border border-transparent focus:border-[#5B4FC4] focus:bg-white outline-none tracking-widest text-center"
+                  placeholder="e.g. 26/MET/CHT/001"
+                  value={searchMatric}
+                  onChange={(e) => setSearchMatric(e.target.value.toUpperCase())}
+                  className="w-full font-mono font-bold text-sm p-3 bg-[#F8F9FA] rounded-lg border border-gray-300 focus:border-[#F47B20] focus:bg-white outline-none tracking-wider text-center"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Academic Criteria Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="font-bold text-gray-700 block mb-1">Academic Session</label>
+                  <label className="font-bold text-gray-700 block mb-1">Academic Session *</label>
                   <select
                     value={selectedSession}
                     onChange={(e) => setSelectedSession(e.target.value)}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none font-medium focus:border-[#F47B20]"
                   >
-                    <option value="2025/2026">2025/2026</option>
-                    <option value="2024/2025">2024/2025</option>
+                    {availableSessions.map(sess => (
+                      <option key={sess} value={sess}>{sess}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="font-bold text-gray-700 block mb-1">Semester</label>
+                  <label className="font-bold text-gray-700 block mb-1">Semester *</label>
                   <select
                     value={selectedSemester}
                     onChange={(e) => setSelectedSemester(e.target.value as any)}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none font-medium focus:border-[#F47B20]"
                   >
                     <option value="1st Semester">1st Semester</option>
                     <option value="2nd Semester">2nd Semester</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Academic Level</label>
+                  <select
+                    value={selectedLevel}
+                    onChange={(e) => setSelectedLevel(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg outline-none font-medium focus:border-[#F47B20]"
+                  >
+                    <option value="All Levels">All Levels (Comprehensive)</option>
+                    <option value="ND1">ND1 (National Diploma I)</option>
+                    <option value="ND2">ND2 (National Diploma II)</option>
+                    <option value="HND1">HND1 (Higher National Diploma I)</option>
+                    <option value="HND2">HND2 (Higher National Diploma II)</option>
                   </select>
                 </div>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 bg-[#F47B20] hover:bg-[#E8601C] text-white font-black text-sm rounded-lg shadow-md transition cursor-pointer"
+                className="w-full py-3 bg-[#F47B20] hover:bg-[#E8601C] text-white font-black text-sm rounded-lg shadow-md transition cursor-pointer flex items-center justify-center gap-2"
               >
-                Authenticate &amp; View Result
+                <Search className="w-4 h-4" />
+                Retrieve Semester Results
               </button>
             </form>
+
+            {/* Quick Matric Chips for Demo/Testing Convenience */}
+            {students.length > 0 && (
+              <div className="mt-5 pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                <span className="font-semibold text-gray-400">Sample Students:</span>
+                {students.slice(0, 4).map(s => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      setSearchMatric(s.matricNumber);
+                      setActiveStudent(s);
+                      setHasRetrieved(true);
+                    }}
+                    className={`px-2 py-0.5 rounded border transition font-mono cursor-pointer ${
+                      searchMatric.toLowerCase() === s.matricNumber.toLowerCase()
+                        ? 'bg-orange-100 text-[#E8601C] border-orange-300 font-bold'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    {s.matricNumber} ({s.firstName})
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Results Table Revealed if PIN verified */}
-          {(isResultUnlocked || studentResults.length > 0) && (
+          {/* Results Table Revealed upon Result Retrieval */}
+          {hasRetrieved && studentResults.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 animate-in fade-in">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 gap-3">
                 <div>
@@ -362,20 +469,20 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
                     Semester Result Slip ({selectedSession} • {selectedSemester})
                   </h3>
                   <p className="text-xs text-gray-500">
-                    Matric No: <strong className="font-mono">{currentStudent?.matricNumber}</strong>
+                    Student: <strong className="text-gray-900">{targetStudent?.firstName} {targetStudent?.middleName || ''} {targetStudent?.lastName}</strong> • Matric No: <strong className="font-mono text-[#F47B20]">{targetStudent?.matricNumber}</strong> • {targetStudent?.programme}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowSlipModal(true)}
-                  className="px-4 py-2 bg-[#1A1A2E] hover:bg-[#2D2D44] text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 self-start"
+                  className="px-4 py-2 bg-[#1A1A2E] hover:bg-[#2D2D44] text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 self-start cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5 text-[#F47B20]" />
-                  Print Official Statement of Result
+                  Print Official Semester Result
                 </button>
               </div>
 
-              {/* Scores table */}
+              {/* Scores table: Course Code | Course Title | Credit Unit | Score | Grade | GP */}
               <div className="my-4 overflow-x-auto">
                 <table className="w-full text-xs text-left border-collapse">
                   <thead>
@@ -383,36 +490,35 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
                       <th className="py-2.5 px-3">Course Code</th>
                       <th className="py-2.5 px-3">Course Title</th>
                       <th className="py-2.5 px-3 text-center">Credit Unit</th>
-                      <th className="py-2.5 px-3 text-center">CA (30)</th>
-                      <th className="py-2.5 px-3 text-center">Exam (70)</th>
-                      <th className="py-2.5 px-3 text-center">Total (100)</th>
+                      <th className="py-2.5 px-3 text-center">Score</th>
                       <th className="py-2.5 px-3 text-center">Grade</th>
-                      <th className="py-2.5 px-3 text-center">Remark</th>
+                      <th className="py-2.5 px-3 text-center">GP</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 font-medium">
-                    {studentResults.map(r => (
-                      <tr key={r.id} className="hover:bg-gray-50">
-                        <td className="py-2.5 px-3 font-bold text-gray-900">{r.courseCode}</td>
-                        <td className="py-2.5 px-3 text-gray-700">{r.courseTitle}</td>
-                        <td className="py-2.5 px-3 text-center font-bold">{r.creditUnit}</td>
-                        <td className="py-2.5 px-3 text-center text-gray-600">{r.caScore}</td>
-                        <td className="py-2.5 px-3 text-center text-gray-600">{r.examScore}</td>
-                        <td className="py-2.5 px-3 text-center font-black text-gray-900">{r.totalScore}</td>
-                        <td className="py-2.5 px-3 text-center font-bold">
-                          <span className={`px-2 py-0.5 rounded text-[11px] ${
-                            r.grade === 'F' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'
-                          }`}>
-                            {r.grade}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-center font-bold">
-                          <span className={r.remark === 'Pass' ? 'text-emerald-700' : 'text-red-600'}>
-                            {r.remark}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {studentResults.map(r => {
+                      const totalScore = Number(r.totalScore || (Number(r.caScore || 0) + Number(r.examScore || 0)));
+                      const gp = typeof r.gradePoint === 'number' ? r.gradePoint : computeGrade(totalScore).gradePoint;
+
+                      return (
+                        <tr key={r.id} className="hover:bg-gray-50">
+                          <td className="py-2.5 px-3 font-bold text-gray-900">{r.courseCode}</td>
+                          <td className="py-2.5 px-3 text-gray-700">{r.courseTitle}</td>
+                          <td className="py-2.5 px-3 text-center font-bold">{r.creditUnit}</td>
+                          <td className="py-2.5 px-3 text-center font-black text-gray-900">{totalScore}</td>
+                          <td className="py-2.5 px-3 text-center font-bold">
+                            <span className={`px-2 py-0.5 rounded text-[11px] ${
+                              r.grade === 'F' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {r.grade}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-mono font-bold text-[#E8601C]">
+                            {gp.toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -569,6 +675,22 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
               </div>
             </div>
           )}
+
+          {/* Empty State when no results found for criteria */}
+          {hasRetrieved && studentResults.length === 0 && (
+            <div className="bg-white rounded-xl border border-dashed border-gray-300 shadow-xs p-8 text-center animate-in fade-in max-w-2xl mx-auto">
+              <AlertCircle className="w-10 h-10 text-amber-500 mx-auto mb-2.5" />
+              <h4 className="font-bold text-gray-900 text-sm">No Published Results Found</h4>
+              <p className="text-xs text-gray-500 max-w-md mx-auto mt-1 mb-3">
+                No published scores were found for Matriculation No. <strong className="font-mono text-gray-800">{targetStudent?.matricNumber}</strong> in <strong className="text-gray-800">{selectedSession} ({selectedSemester})</strong>{selectedLevel !== 'All Levels' ? ` for level ${selectedLevel}` : ''}.
+              </p>
+              <div className="p-3.5 bg-amber-50/60 rounded-xl border border-amber-200 text-[11px] text-amber-900 max-w-md mx-auto text-left space-y-1.5">
+                <p className="font-semibold">• Verify that the academic session and semester selected match your examination period.</p>
+                <p className="font-semibold">• Only results officially endorsed by the Academic Board and Examination Office are visible here.</p>
+                <p className="font-semibold">• If examinations were concluded recently, please check back once departmental results are approved.</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -652,7 +774,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
             <div>
               <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-[#F47B20]" />
-                Official Statement of Result Document
+                Official Semester Result Document
               </h3>
               <p className="text-xs text-gray-500">
                 Official institutional printout featuring watermarked seal and signatures of Exam Officer, HOD, and Registrar.
@@ -660,7 +782,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
             </div>
             <button
               onClick={() => setShowSlipModal(true)}
-              className="px-4 py-2 bg-[#F47B20] hover:bg-[#E8601C] text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5"
+              className="px-4 py-2 bg-[#F47B20] hover:bg-[#E8601C] text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
               Preview &amp; Print PDF
@@ -669,16 +791,16 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
 
           <div className="p-6 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-center">
             <GraduationCap className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-            <h4 className="font-bold text-gray-800 text-sm">Statement of Result Available</h4>
+            <h4 className="font-bold text-gray-800 text-sm">Semester Result Available</h4>
             <p className="text-xs text-gray-500 max-w-md mx-auto mt-1 mb-4">
               Your academic scores for session {settings.currentSession} have been computed with Semester GPA: <strong>{studentSummary.gpa.toFixed(2)}</strong> and CGPA: <strong>{studentSummary.cgpa.toFixed(2)}</strong> ({studentSummary.classification}).
             </p>
             <button
               onClick={() => setShowSlipModal(true)}
-              className="px-5 py-2.5 bg-[#1A1A2E] hover:bg-[#2D2D44] text-white font-bold text-xs rounded-xl shadow-sm transition inline-flex items-center gap-2"
+              className="px-5 py-2.5 bg-[#1A1A2E] hover:bg-[#2D2D44] text-white font-bold text-xs rounded-xl shadow-sm transition inline-flex items-center gap-2 cursor-pointer"
             >
               <Download className="w-4 h-4 text-[#F47B20]" />
-              Download Statement of Result
+              Download Semester Result
             </button>
           </div>
         </div>
@@ -734,10 +856,10 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
       )}
 
       {/* Result Slip Modal Preview */}
-      {showSlipModal && (
+      {showSlipModal && targetStudent && (
         <ResultSlip
-          student={currentStudent}
-          results={studentResults.length > 0 ? studentResults : results.filter(r => r.studentId === currentStudent.id)}
+          student={targetStudent}
+          results={studentResults}
           summary={studentSummary}
           signatures={signatures}
           session={selectedSession}

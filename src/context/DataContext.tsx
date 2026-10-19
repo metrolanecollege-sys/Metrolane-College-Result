@@ -198,6 +198,75 @@ const INITIAL_COURSES: Course[] = [
     lecturerName: 'Engr. D. Adeleke',
     isActive: true
   },
+  // ND1 2nd Semester Courses
+  {
+    id: 'course_cht102',
+    courseCode: 'CHT 102',
+    courseTitle: 'Community Health Practice II',
+    creditUnit: 3,
+    courseType: 'Core',
+    programme: 'ND in Community Health Technology',
+    programmeCode: 'CHT',
+    level: 'ND1',
+    semester: '2nd Semester',
+    caWeight: 30,
+    examWeight: 70,
+    prerequisite: 'CHT 101',
+    lecturerId: 'lecturer_001',
+    lecturerName: 'Dr. Amina Bello',
+    isActive: true
+  },
+  {
+    id: 'course_cht104',
+    courseCode: 'CHT 104',
+    courseTitle: 'Nutrition & Food Hygiene',
+    creditUnit: 2,
+    courseType: 'Core',
+    programme: 'ND in Community Health Technology',
+    programmeCode: 'CHT',
+    level: 'ND1',
+    semester: '2nd Semester',
+    caWeight: 30,
+    examWeight: 70,
+    prerequisite: null,
+    lecturerId: 'lecturer_001',
+    lecturerName: 'Dr. Amina Bello',
+    isActive: true
+  },
+  {
+    id: 'course_cht106',
+    courseCode: 'CHT 106',
+    courseTitle: 'Anatomy & Physiology II',
+    creditUnit: 3,
+    courseType: 'Core',
+    programme: 'ND in Community Health Technology',
+    programmeCode: 'CHT',
+    level: 'ND1',
+    semester: '2nd Semester',
+    caWeight: 30,
+    examWeight: 70,
+    prerequisite: 'CHT 105',
+    lecturerId: 'lecturer_001',
+    lecturerName: 'Dr. Amina Bello',
+    isActive: true
+  },
+  {
+    id: 'course_gns102',
+    courseCode: 'GNS 102',
+    courseTitle: 'Use of English II',
+    creditUnit: 2,
+    courseType: 'General Studies',
+    programme: 'ND in Community Health Technology',
+    programmeCode: 'CHT',
+    level: 'ND1',
+    semester: '2nd Semester',
+    caWeight: 30,
+    examWeight: 70,
+    prerequisite: 'GNS 101',
+    lecturerId: 'lecturer_003',
+    lecturerName: 'Mrs. C. Okeke',
+    isActive: true
+  },
   // Public health sample courses
   {
     id: 'course_pbh101',
@@ -674,6 +743,127 @@ const INITIAL_RESULTS: ResultScore[] = [
     },
     createdAt: '2026-02-05T11:00:00Z'
   },
+  // ND1 2nd Semester Results for John Doe (26/MET/CHT/001)
+  {
+    id: 'res_001_s2',
+    studentId: 'student_001',
+    matricNumber: '26/MET/CHT/001',
+    studentName: 'John Chukwuemeka Doe',
+    courseId: 'course_cht102',
+    courseCode: 'CHT 102',
+    courseTitle: 'Community Health Practice II',
+    creditUnit: 3,
+    session: '2025/2026',
+    semester: '2nd Semester',
+    level: 'ND1',
+    programme: 'ND in Community Health Technology',
+    caScore: 25,
+    examScore: 57,
+    totalScore: 82,
+    grade: 'A',
+    gradePoint: 4.00,
+    qualityPoint: 12.00,
+    remark: 'Pass',
+    isCarryover: false,
+    enteredBy: 'lecturer_001',
+    status: 'published',
+    approvals: {
+      hod: { approved: true, by: 'Dr. Ibrahim Al-Hassan', date: '2026-06-10T11:00:00Z' },
+      examOfficer: { approved: true, by: 'Dr. (Mrs) Folashade Adeyemi', date: '2026-06-12T14:00:00Z' },
+      registrar: { approved: true, by: 'Barr. M. O. Danladi', date: '2026-06-14T09:00:00Z' }
+    },
+    createdAt: '2026-06-05T10:00:00Z'
+  },
+  {
+    id: 'res_002_s2',
+    studentId: 'student_001',
+    matricNumber: '26/MET/CHT/001',
+    studentName: 'John Chukwuemeka Doe',
+    courseId: 'course_cht104',
+    courseCode: 'CHT 104',
+    courseTitle: 'Nutrition & Food Hygiene',
+    creditUnit: 2,
+    session: '2025/2026',
+    semester: '2nd Semester',
+    level: 'ND1',
+    programme: 'ND in Community Health Technology',
+    caScore: 20,
+    examScore: 48,
+    totalScore: 68,
+    grade: 'B',
+    gradePoint: 3.25,
+    qualityPoint: 6.50,
+    remark: 'Pass',
+    isCarryover: false,
+    enteredBy: 'lecturer_001',
+    status: 'published',
+    approvals: {
+      hod: { approved: true, by: 'Dr. Ibrahim Al-Hassan', date: '2026-06-10T11:00:00Z' },
+      examOfficer: { approved: true, by: 'Dr. (Mrs) Folashade Adeyemi', date: '2026-06-12T14:00:00Z' },
+      registrar: { approved: true, by: 'Barr. M. O. Danladi', date: '2026-06-14T09:00:00Z' }
+    },
+    createdAt: '2026-06-05T10:15:00Z'
+  },
+  {
+    id: 'res_003_s2',
+    studentId: 'student_001',
+    matricNumber: '26/MET/CHT/001',
+    studentName: 'John Chukwuemeka Doe',
+    courseId: 'course_cht106',
+    courseCode: 'CHT 106',
+    courseTitle: 'Anatomy & Physiology II',
+    creditUnit: 3,
+    session: '2025/2026',
+    semester: '2nd Semester',
+    level: 'ND1',
+    programme: 'ND in Community Health Technology',
+    caScore: 21,
+    examScore: 50,
+    totalScore: 71,
+    grade: 'AB',
+    gradePoint: 3.50,
+    qualityPoint: 10.50,
+    remark: 'Pass',
+    isCarryover: false,
+    enteredBy: 'lecturer_001',
+    status: 'published',
+    approvals: {
+      hod: { approved: true, by: 'Dr. Ibrahim Al-Hassan', date: '2026-06-10T11:00:00Z' },
+      examOfficer: { approved: true, by: 'Dr. (Mrs) Folashade Adeyemi', date: '2026-06-12T14:00:00Z' },
+      registrar: { approved: true, by: 'Barr. M. O. Danladi', date: '2026-06-14T09:00:00Z' }
+    },
+    createdAt: '2026-06-05T10:30:00Z'
+  },
+  {
+    id: 'res_004_s2',
+    studentId: 'student_001',
+    matricNumber: '26/MET/CHT/001',
+    studentName: 'John Chukwuemeka Doe',
+    courseId: 'course_gns102',
+    courseCode: 'GNS 102',
+    courseTitle: 'Use of English II',
+    creditUnit: 2,
+    session: '2025/2026',
+    semester: '2nd Semester',
+    level: 'ND1',
+    programme: 'ND in Community Health Technology',
+    caScore: 19,
+    examScore: 43,
+    totalScore: 62,
+    grade: 'BC',
+    gradePoint: 3.00,
+    qualityPoint: 6.00,
+    remark: 'Pass',
+    isCarryover: false,
+    enteredBy: 'lecturer_003',
+    status: 'published',
+    approvals: {
+      hod: { approved: true, by: 'Dr. Ibrahim Al-Hassan', date: '2026-06-10T11:00:00Z' },
+      examOfficer: { approved: true, by: 'Dr. (Mrs) Folashade Adeyemi', date: '2026-06-12T14:00:00Z' },
+      registrar: { approved: true, by: 'Barr. M. O. Danladi', date: '2026-06-14T09:00:00Z' }
+    },
+    createdAt: '2026-06-05T11:00:00Z'
+  },
   {
     id: 'res_005',
     studentId: 'student_002',
@@ -1029,7 +1219,7 @@ interface DataContextType {
 
   logAudit: (action: string, description: string, userRole?: string, userName?: string, userId?: string) => Promise<void>;
 
-  computeStudentSemesterSummary: (studentId: string, session: string, semester: '1st Semester' | '2nd Semester') => SemesterResultSummary;
+  computeStudentSemesterSummary: (studentId: string, session: string, semester: '1st Semester' | '2nd Semester', level?: string) => SemesterResultSummary;
 
   users: UserProfile[];
   addUser: (data: Partial<UserProfile>) => Promise<UserProfile>;
@@ -1911,14 +2101,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const computeStudentSemesterSummary = (
     studentId: string, 
     session: string, 
-    semester: '1st Semester' | '2nd Semester'
+    semester: '1st Semester' | '2nd Semester',
+    level?: string
   ): SemesterResultSummary => {
     const student = students.find(s => s.id === studentId);
+    const targetLvl = level || results.find(r => 
+      (r.studentId === studentId || (student?.matricNumber && r.matricNumber.trim().toLowerCase() === student.matricNumber.trim().toLowerCase())) && 
+      r.session === session && 
+      r.semester === semester
+    )?.level || student?.level || 'ND1';
 
     // Call unified progression calculation engine
     const progression = calculateAcademicProgression({
       student,
-      targetLevel: student?.level,
+      targetLevel: targetLvl,
       targetSemester: semester,
       targetSession: session,
       allResults: results,

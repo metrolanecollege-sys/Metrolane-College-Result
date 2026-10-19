@@ -28,18 +28,38 @@ interface AuthContextType {
   changePassword: (newPassword: string, currentPassword?: string) => Promise<{ success: boolean; message: string }>;
   switchRole: (role: UserRole) => void;
   updateCurrentUserProfile: (data: Partial<UserProfile>) => Promise<void>;
+  updateUserCredentials: (
+    identifier: string, 
+    newEmail: string, 
+    newPassword?: string,
+    extra?: { matricNumber?: string; fullName?: string; role?: UserRole }
+  ) => Promise<{ success: boolean; message: string }>;
   clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// In-memory passwords cache for runtime session password changes (no localStorage persistence)
-const inMemoryPasswords: Record<string, string> = {};
+// In-memory passwords cache initialized from persistent storage if present
+const inMemoryPasswords: Record<string, string> = (() => {
+  try {
+    const s = localStorage.getItem('metrolane_saved_passwords');
+    return s ? JSON.parse(s) : {};
+  } catch {
+    return {};
+  }
+})();
 
 const saveCustomPassword = (keys: string[], password: string) => {
   keys.forEach(k => {
     if (k) inMemoryPasswords[k.trim().toLowerCase()] = password;
   });
+  try {
+    const existing = JSON.parse(localStorage.getItem('metrolane_saved_passwords') || '{}');
+    keys.forEach(k => {
+      if (k) existing[k.trim().toLowerCase()] = password;
+    });
+    localStorage.setItem('metrolane_saved_passwords', JSON.stringify(existing));
+  } catch {}
 };
 
 // Pre-configured accounts for seamless role verification and testing
@@ -235,7 +255,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (found) {
         const { userProfile, defaultPass } = found;
-        const customPass = inMemoryPasswords[cleanInput] || inMemoryPasswords[userProfile.email.toLowerCase()];
+        const customPass = inMemoryPasswords[cleanInput] || 
+                           inMemoryPasswords[userProfile.email.toLowerCase()] ||
+                           (found.matric ? inMemoryPasswords[found.matric.toLowerCase()] : undefined);
 
         // Verify password securely: check in-memory custom pass first, then configured default pass
         const hasValidCustomPass = customPass && cleanPassword === customPass;
@@ -431,6 +453,92 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserCredentials = async (
+    identifier: string, 
+    newEmail: string, 
+    newPassword?: string,
+    extra?: { matricNumber?: string; fullName?: string; role?: UserRole }
+  ): Promise<{ success: boolean; message: string }> => {
+    const cleanId = identifier.trim().toLowerCase();
+    const cleanNewEmail = newEmail.trim().toLowerCase();
+    const cleanMatric = extra?.matricNumber ? extra.matricNumber.trim().toLowerCase() : undefined;
+
+    // 1. If password is provided, cache and persist it across all identifiers
+    if (newPassword && newPassword.trim()) {
+      const keysToSave = [cleanId, cleanNewEmail];
+      if (cleanMatric) keysToSave.push(cleanMatric);
+      saveCustomPassword(keysToSave, newPassword.trim());
+    }
+
+    // 2. Update users list in localStorage
+    try {
+      const rawUsers = localStorage.getItem('metrolane_users');
+      if (rawUsers) {
+        const usersList: UserProfile[] = JSON.parse(rawUsers);
+        const idx = usersList.findIndex(u => u.email.toLowerCase() === cleanId || u.uid.toLowerCase() === cleanId);
+        if (idx !== -1) {
+          usersList[idx].email = cleanNewEmail;
+          if (extra?.fullName) usersList[idx].fullName = extra.fullName;
+          if (extra?.role) usersList[idx].role = extra.role;
+          usersList[idx].updatedAt = new Date().toISOString();
+          localStorage.setItem('metrolane_users', JSON.stringify(usersList));
+        }
+      }
+    } catch {}
+
+    // 3. Update students list in localStorage
+    try {
+      const rawStudents = localStorage.getItem('metrolane_students');
+      if (rawStudents) {
+        const studentsList: any[] = JSON.parse(rawStudents);
+        const sIdx = studentsList.findIndex(s => 
+          (s.matricNumber && s.matricNumber.toLowerCase() === cleanId) ||
+          (s.email && s.email.toLowerCase() === cleanId) ||
+          (s.id && s.id.toLowerCase() === cleanId)
+        );
+        if (sIdx !== -1) {
+          studentsList[sIdx].email = cleanNewEmail;
+          if (extra?.matricNumber) studentsList[sIdx].matricNumber = extra.matricNumber;
+          if (extra?.fullName) {
+            const parts = extra.fullName.split(' ');
+            studentsList[sIdx].firstName = parts[0] || studentsList[sIdx].firstName;
+            studentsList[sIdx].lastName = parts.slice(1).join(' ') || studentsList[sIdx].lastName;
+          }
+          localStorage.setItem('metrolane_students', JSON.stringify(studentsList));
+        }
+      }
+    } catch {}
+
+    // 4. Update Firestore user document if reachable
+    try {
+      await setDoc(doc(db, 'users', identifier), {
+        email: cleanNewEmail,
+        ...(extra?.matricNumber ? { matricNumber: extra.matricNumber } : {}),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch {}
+
+    // 5. Update pre-configured DEFAULT_ACCOUNTS in memory
+    for (const r of Object.keys(DEFAULT_ACCOUNTS) as UserRole[]) {
+      const acc = DEFAULT_ACCOUNTS[r];
+      if (
+        acc.email.toLowerCase() === cleanId ||
+        acc.uid.toLowerCase() === cleanId ||
+        (acc.matricNumber && acc.matricNumber.toLowerCase() === cleanId)
+      ) {
+        acc.email = cleanNewEmail;
+        if (extra?.matricNumber) acc.matricNumber = extra.matricNumber;
+        if (extra?.fullName) acc.fullName = extra.fullName;
+        if (newPassword && newPassword.trim()) acc.defaultPassword = newPassword.trim();
+      }
+    }
+
+    return {
+      success: true,
+      message: `Login credentials for ${newEmail} updated successfully!`
+    };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -444,6 +552,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         changePassword,
         switchRole,
         updateCurrentUserProfile,
+        updateUserCredentials,
         clearError: () => setError(null)
       }}
     >

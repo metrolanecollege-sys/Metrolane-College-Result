@@ -305,34 +305,72 @@ export interface CGPAProgressionBreakdown {
  * Directly wraps calculateAcademicProgression for single-course draft calculations.
  */
 export function computeProgressionCGPA(
-  student: { level?: string; year?: 1 | 2; previousCgpa?: number; previousCreditUnits?: number; previousQualityPoints?: number; programme?: string; matricNumber?: string } | undefined,
+  student: { 
+    level?: string; 
+    year?: 1 | 2; 
+    currentSemester?: '1st Semester' | '2nd Semester';
+    previousCgpa?: number; 
+    previousCreditUnits?: number; 
+    previousQualityPoints?: number; 
+    programme?: string; 
+    matricNumber?: string 
+  } | undefined,
   currentUnits: number,
   currentQualityPoints: number,
-  historicalResults: { creditUnit: number; qualityPoint: number; level?: string }[] = []
+  historicalResults: { creditUnit: number; qualityPoint: number; level?: string; semester?: string }[] = [],
+  targetSemester?: '1st Semester' | '2nd Semester'
 ): CGPAProgressionBreakdown {
-  const isYear2 = student?.level === 'ND2' || student?.level === 'HND2' || student?.year === 2;
+  const currentLevel = (student?.level || 'ND1').toUpperCase();
+  const isYear2 = currentLevel === 'ND2' || currentLevel === 'HND2' || student?.year === 2;
+  const sem = targetSemester || student?.currentSemester || (isYear2 ? '1st Semester' : '2nd Semester');
+  
   const levelLabel = isYear2 
-    ? (student?.level === 'HND2' ? 'Year 2 (HND2)' : 'Year 2 (ND2)') 
-    : (student?.level === 'HND1' ? 'Year 1 (HND1)' : 'Year 1 (ND1)');
+    ? (currentLevel === 'HND2' ? 'Year 2 (HND2)' : 'Year 2 (ND2)') 
+    : (currentLevel === 'HND1' ? 'Year 1 (HND1)' : 'Year 1 (ND1)');
 
   let previousUnits = 0;
   let previousQualityPoints = 0;
   let previousCgpa = 0;
 
-  if (isYear2) {
-    const priorResults = historicalResults.filter(r => r.level === 'ND1' || r.level === 'HND1');
+  // 1. If in ND 1 2nd Semester: accumulate prior 1st semester
+  if (!isYear2 && sem === '2nd Semester') {
+    const priorResults = historicalResults.filter(r => 
+      (r.level === 'ND1' || r.level === 'HND1' || !r.level) && 
+      (r.semester === '1st Semester' || !r.semester)
+    );
     if (priorResults.length > 0) {
       previousUnits = priorResults.reduce((acc, curr) => acc + (curr.creditUnit || 0), 0);
       previousQualityPoints = priorResults.reduce((acc, curr) => acc + (curr.qualityPoint || 0), 0);
       previousCgpa = previousUnits > 0 ? parseFloat((previousQualityPoints / previousUnits).toFixed(2)) : 0;
-    } 
+    } else if (student?.previousCgpa && student.previousCgpa > 0) {
+      previousCgpa = student.previousCgpa;
+      previousUnits = student.previousCreditUnits || 18;
+      previousQualityPoints = parseFloat((previousCgpa * previousUnits).toFixed(2));
+    }
+  } 
+  // 2. If in Year 2 (ND2 or HND2): accumulate from Year 1 (ND1 / HND1) and if 2nd sem, ND2 1st sem
+  else if (isYear2) {
+    const isYear2SecondSem = sem === '2nd Semester';
+    const priorResults = historicalResults.filter(r => {
+      if (currentLevel.startsWith('HND')) {
+        return r.level === 'HND1' || (isYear2SecondSem && r.level === 'HND2' && r.semester === '1st Semester');
+      }
+      return r.level === 'ND1' || (isYear2SecondSem && r.level === 'ND2' && r.semester === '1st Semester');
+    });
+
+    if (priorResults.length > 0) {
+      previousUnits = priorResults.reduce((acc, curr) => acc + (curr.creditUnit || 0), 0);
+      previousQualityPoints = priorResults.reduce((acc, curr) => acc + (curr.qualityPoint || 0), 0);
+      previousCgpa = previousUnits > 0 ? parseFloat((previousQualityPoints / previousUnits).toFixed(2)) : 0;
+    }
 
     if (student?.previousCgpa && student.previousCgpa > 0) {
-      previousCgpa = student.previousCgpa;
-      previousUnits = student.previousCreditUnits && student.previousCreditUnits > 0 ? student.previousCreditUnits : (previousUnits > 0 ? previousUnits : 36);
-      previousQualityPoints = student.previousQualityPoints && student.previousQualityPoints > 0 
-        ? student.previousQualityPoints 
-        : parseFloat((previousCgpa * previousUnits).toFixed(2));
+      const baselineUnits = student.previousCreditUnits && student.previousCreditUnits > 0 ? student.previousCreditUnits : (previousUnits > 0 ? previousUnits : 36);
+      if (previousUnits === 0) {
+        previousCgpa = student.previousCgpa;
+        previousUnits = baselineUnits;
+        previousQualityPoints = student.previousQualityPoints || parseFloat((previousCgpa * previousUnits).toFixed(2));
+      }
     } else if (previousUnits === 0) {
       previousCgpa = 3.40;
       previousUnits = 36;
