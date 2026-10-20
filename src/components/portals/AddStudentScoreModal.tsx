@@ -49,10 +49,21 @@ export const AddStudentScoreModal: React.FC<AddStudentScoreModalProps> = ({
     course.programme.includes('Health') ? 'Health Technician' : 'Public Health'
   );
 
-  // Year 2 / Previous CGPA calculation fields
+  // Progressive CGPA continuation states
+  const isND1SecondSem = (level === 'ND1' || level === 'HND1') && course.semester === '2nd Semester';
+  const isND2FirstSem = (level === 'ND2' || level === 'HND2') && course.semester === '1st Semester';
+  const isND2SecondSem = (level === 'ND2' || level === 'HND2') && course.semester === '2nd Semester';
   const isYear2 = level === 'ND2' || level === 'HND2';
+  const hasPreviousSemesters = isND1SecondSem || isND2FirstSem || isND2SecondSem || isYear2;
+
+  const defaultPrevUnits = isND2SecondSem ? '54' : (isND2FirstSem || isYear2 ? '36' : '18');
   const [previousCgpa, setPreviousCgpa] = useState<string>('3.45');
-  const [previousUnits, setPreviousUnits] = useState<string>('36');
+  const [previousUnits, setPreviousUnits] = useState<string>(defaultPrevUnits);
+
+  // Update previousUnits when level or semester changes
+  useEffect(() => {
+    setPreviousUnits(defaultPrevUnits);
+  }, [defaultPrevUnits]);
 
   // Course Score Inputs (Continuous Assessment max 30, Exam max 70)
   const [caScore, setCaScore] = useState<string>('24');
@@ -82,7 +93,7 @@ export const AddStudentScoreModal: React.FC<AddStudentScoreModalProps> = ({
     matricInputRef.current?.focus();
   }, []);
 
-  // Auto calculate previous quality points for Year 2 students
+  // Auto calculate previous quality points for previous semesters
   const parsedPrevCgpa = parseFloat(previousCgpa) || 0;
   const parsedPrevUnits = parseInt(previousUnits, 10) || 0;
   const computedPrevQP = parseFloat((parsedPrevCgpa * parsedPrevUnits).toFixed(2));
@@ -100,14 +111,17 @@ export const AddStudentScoreModal: React.FC<AddStudentScoreModalProps> = ({
       {
         level,
         year: isYear2 ? 2 : 1,
-        previousCgpa: isYear2 ? parsedPrevCgpa : 0,
-        previousCreditUnits: isYear2 ? parsedPrevUnits : 0,
-        previousQualityPoints: isYear2 ? computedPrevQP : 0
+        currentSemester: course.semester as any,
+        previousCgpa: hasPreviousSemesters ? parsedPrevCgpa : 0,
+        previousCreditUnits: hasPreviousSemesters ? parsedPrevUnits : 0,
+        previousQualityPoints: hasPreviousSemesters ? computedPrevQP : 0
       },
       course.creditUnit,
-      currentQP
+      currentQP,
+      [],
+      course.semester as any
     );
-  }, [level, isYear2, parsedPrevCgpa, parsedPrevUnits, computedPrevQP, course.creditUnit, currentQP]);
+  }, [level, isYear2, hasPreviousSemesters, parsedPrevCgpa, parsedPrevUnits, computedPrevQP, course.creditUnit, currentQP, course.semester]);
 
   // Filter available existing college students
   const availableExistingStudents = useMemo(() => {
@@ -163,9 +177,9 @@ export const AddStudentScoreModal: React.FC<AddStudentScoreModalProps> = ({
           programmeCode: (course.programmeCode as any) || 'CHT',
           level,
           year: isYear2 ? 2 : 1,
-          previousCgpa: isYear2 ? parsedPrevCgpa : undefined,
-          previousCreditUnits: isYear2 ? parsedPrevUnits : undefined,
-          previousQualityPoints: isYear2 ? computedPrevQP : undefined,
+          previousCgpa: hasPreviousSemesters ? parsedPrevCgpa : undefined,
+          previousCreditUnits: hasPreviousSemesters ? parsedPrevUnits : undefined,
+          previousQualityPoints: hasPreviousSemesters ? computedPrevQP : undefined,
           admissionYear: isYear2 ? '2025' : '2026',
           currentSession: settings.currentSession,
           currentSemester: settings.currentSemester,
@@ -387,23 +401,32 @@ export const AddStudentScoreModal: React.FC<AddStudentScoreModalProps> = ({
                 </div>
               </div>
 
-              {/* Year 2 CGPA Baseline Box (When ND2 or HND2 is chosen) */}
-              {isYear2 && (
+              {/* Progressive CGPA Baseline Box (ND1 2nd Sem, ND2, HND1 2nd Sem, HND2) */}
+              {hasPreviousSemesters && (
                 <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-[#F47B20]/40 rounded-xl space-y-3 shadow-xs">
                   <div className="flex items-center gap-2 text-amber-900 font-bold">
                     <Sparkles className="w-4 h-4 text-[#F47B20]" />
                     <span className="text-xs uppercase tracking-wide">
-                      Year 2 Student: Cumulative CGPA Continuation
+                      {isND1SecondSem ? 'ND 1 2nd Semester: Cumulative CGPA Continuation' :
+                       isND2FirstSem ? 'ND 2 1st Semester: Progressive CGPA Continuation' :
+                       isND2SecondSem ? 'ND 2 2nd Semester (Graduation): Cumulative CGPA Continuation' :
+                       'Cumulative CGPA Progression'}
                     </span>
                   </div>
                   <p className="text-[11px] text-amber-800 leading-relaxed">
-                    Student is enrolling at <strong>Year 2 ({level})</strong>. Enter their <strong>Year 1 previous academic record</strong> below to calculate their updated continuous CGPA automatically.
+                    {isND1SecondSem
+                      ? 'Student is registering for 2nd Semester. First semester courses will NOT appear on this result slip; only the cumulative CGPA will be calculated from 1st semester to current semester.'
+                      : isND2FirstSem
+                      ? 'Student is entering Year 2 (ND 2 1st Semester). Enter their completed Year 1 (ND 1) CGPA and units below to continue calculating cumulative CGPA until graduation.'
+                      : isND2SecondSem
+                      ? 'Student is entering ND 2 Final Semester. Enter cumulative CGPA and units from previous semesters to calculate final graduation CGPA.'
+                      : `Enter prior completed academic record for ${level} to continue calculating cumulative CGPA.`}
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                     <div>
                       <label htmlFor="prev-cgpa" className="block font-bold text-gray-800 mb-1">
-                        Previous CGPA (Year 1) *
+                        {isND1SecondSem ? '1st Semester CGPA *' : isND2FirstSem ? 'Year 1 CGPA *' : 'Previous CGPA *'}
                       </label>
                       <input
                         id="prev-cgpa"
@@ -421,23 +444,25 @@ export const AddStudentScoreModal: React.FC<AddStudentScoreModalProps> = ({
 
                     <div>
                       <label htmlFor="prev-units" className="block font-bold text-gray-800 mb-1">
-                        Year 1 Credit Units
+                        Previous Credit Units
                       </label>
                       <input
                         id="prev-units"
                         type="number"
                         min="1"
-                        max="60"
+                        max="120"
                         value={previousUnits}
                         onChange={(e) => setPreviousUnits(e.target.value)}
                         className="w-full p-2 bg-white border border-gray-300 rounded-lg font-mono font-bold text-sm text-gray-800 outline-none text-center"
                       />
-                      <span className="text-[10px] text-gray-500 mt-0.5 block">Standard Year 1: ~36 CU</span>
+                      <span className="text-[10px] text-gray-500 mt-0.5 block">
+                        {isND1SecondSem ? '1st Sem Units (~18)' : isND2FirstSem ? 'Year 1 Units (~36)' : 'Prior Units'}
+                      </span>
                     </div>
 
                     <div>
                       <span className="block font-bold text-gray-800 mb-1">
-                        Year 1 Quality Points (Auto)
+                        Previous Quality Points (Auto)
                       </span>
                       <div className="p-2 bg-amber-100/60 border border-amber-200 rounded-lg font-mono font-bold text-sm text-amber-900 text-center">
                         {computedPrevQP.toFixed(2)}

@@ -325,7 +325,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ activeTab, onSelec
               </div>
               <h3 className="text-lg font-black text-gray-900">Online Result Checking Portal</h3>
               <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
-                Retrieve and view official statement of semester results using your Matriculation Number and academic session/semester criteria.
+                Retrieve and view official semester results using your Matriculation Number and academic session/semester criteria.
               </p>
             </div>
 

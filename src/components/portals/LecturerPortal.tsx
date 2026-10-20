@@ -50,7 +50,9 @@ import {
   AlertTriangle,
   ClipboardList,
   BarChart3,
-  FileCheck
+  FileCheck,
+  KeyRound,
+  Shield
 } from 'lucide-react';
 
 interface IctUserPortalProps {
@@ -59,8 +61,10 @@ interface IctUserPortalProps {
 }
 
 export const LecturerPortal: React.FC<IctUserPortalProps> = ({ activeTab, onSelectTab }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, updateUserCredentials } = useAuth();
   const { 
+    users,
+    updateUser,
     courses, 
     students, 
     results, 
@@ -111,6 +115,21 @@ export const LecturerPortal: React.FC<IctUserPortalProps> = ({ activeTab, onSele
   const [deleteConfirmCourse, setDeleteConfirmCourse] = useState<Course | null>(null);
   const [selectedStudentForSlip, setSelectedStudentForSlip] = useState<StudentRecord | null>(null);
 
+  // User credentials management states for ICT
+  const [credentialUser, setCredentialUser] = useState<{
+    uid: string;
+    email: string;
+    fullName: string;
+    role: string;
+    matricNumber?: string;
+  } | null>(null);
+  const [credNewEmail, setCredNewEmail] = useState('');
+  const [credNewMatric, setCredNewMatric] = useState('');
+  const [credNewPass, setCredNewPass] = useState('');
+  const [showCredPass, setShowCredPass] = useState(false);
+  const [userCredSearch, setUserCredSearch] = useState('');
+  const [userCredRoleFilter, setUserCredRoleFilter] = useState('all');
+
   // ==========================================
   // SECTION 1: COURSE-BY-COURSE RESULT ENTRY
   // ==========================================
@@ -119,6 +138,50 @@ export const LecturerPortal: React.FC<IctUserPortalProps> = ({ activeTab, onSele
   const [selectedDept, setSelectedDept] = useState<string>('Community Health Technology');
   const [selectedLevel, setSelectedLevel] = useState<'ND1' | 'ND2' | 'HND1' | 'HND2'>('ND1');
   const [selectedSemester, setSelectedSemester] = useState<'1st Semester' | '2nd Semester'>('1st Semester');
+
+  // Combined accounts for ICT login credentials management
+  const combinedAccounts = useMemo(() => {
+    const list: Array<{
+      uid: string;
+      email: string;
+      fullName: string;
+      role: string;
+      matricNumber?: string;
+      department?: string;
+      isActive: boolean;
+      source: 'user' | 'student';
+    }> = [];
+
+    (users || []).forEach(u => {
+      list.push({
+        uid: u.uid || u.email,
+        email: u.email,
+        fullName: u.fullName || u.email,
+        role: u.role || 'staff',
+        matricNumber: (u as any).matricNumber,
+        department: u.department,
+        isActive: u.isActive !== false,
+        source: 'user'
+      });
+    });
+
+    (students || []).forEach(s => {
+      if (!list.some(item => item.email.toLowerCase() === s.email.toLowerCase() || item.uid === s.id)) {
+        list.push({
+          uid: s.id,
+          email: s.email,
+          fullName: `${s.firstName} ${s.middleName ? s.middleName + ' ' : ''}${s.lastName}`.trim(),
+          role: 'student',
+          matricNumber: s.matricNumber,
+          department: s.department,
+          isActive: s.status === 'active',
+          source: 'student'
+        });
+      }
+    });
+
+    return list;
+  }, [users, students]);
 
   // Filter courses strictly matching: Department, Programme type, Level, and Semester
   const filteredCourses = useMemo(() => {
@@ -1441,6 +1504,26 @@ export const LecturerPortal: React.FC<IctUserPortalProps> = ({ activeTab, onSele
                               </button>
                               <button
                                 type="button"
+                                onClick={() => {
+                                  setCredentialUser({
+                                    uid: std.id,
+                                    email: std.email,
+                                    fullName: `${std.firstName} ${std.lastName}`,
+                                    role: 'student',
+                                    matricNumber: std.matricNumber
+                                  });
+                                  setCredNewEmail(std.email);
+                                  setCredNewMatric(std.matricNumber);
+                                  setCredNewPass('');
+                                  setShowCredPass(false);
+                                }}
+                                className="p-1.5 text-gray-600 hover:text-amber-600 hover:bg-amber-50 rounded-md transition cursor-pointer"
+                                title="Change Student Login Credentials"
+                              >
+                                <KeyRound className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => setDeleteConfirmStudent(std)}
                                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition cursor-pointer"
                                 title="Withdraw or Delete Student"
@@ -1453,6 +1536,158 @@ export const LecturerPortal: React.FC<IctUserPortalProps> = ({ activeTab, onSele
                       );
                     })
                   )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 3B. USER LOGIN CREDENTIALS MANAGEMENT (ICT AUTHORIZED) */}
+      {/* ========================================================= */}
+      {currentTab === 'user_credentials' && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-extrabold text-gray-900 text-base flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-[#FF6B0A]" />
+                User Login Credentials & Access Control
+              </h3>
+              <p className="text-xs text-gray-500">
+                Authorized ICT operations interface to view and modify login emails, usernames, matriculation numbers, and passwords for all students and staff.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="px-3 py-1.5 bg-orange-50 border border-orange-200 text-[#E8601C] rounded-lg font-bold">
+                Total Users: {combinedAccounts.length}
+              </span>
+              <span className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg font-bold">
+                Students: {students.length}
+              </span>
+            </div>
+          </div>
+
+          {/* Search and Role Filter Bar */}
+          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by full name, login email, or matric / staff ID..."
+                value={userCredSearch}
+                onChange={(e) => setUserCredSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-xs outline-none focus:border-[#FF6B0A] focus:bg-white"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-400 hidden sm:block" />
+              <select
+                value={userCredRoleFilter}
+                onChange={(e) => setUserCredRoleFilter(e.target.value)}
+                className="p-2 bg-gray-50 border border-gray-300 rounded-lg text-xs outline-none focus:border-[#FF6B0A] focus:bg-white font-medium"
+              >
+                <option value="all">All Roles ({combinedAccounts.length})</option>
+                <option value="student">Students ({students.length})</option>
+                <option value="lecturer">Lecturers / ICT Staff</option>
+                <option value="hod">Heads of Department (HOD)</option>
+                <option value="exam_officer">Examination Officers</option>
+                <option value="registrar">Registrars</option>
+                <option value="super_admin">Super Admins</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Accounts Table */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-600 uppercase text-[10px] tracking-wider border-b border-gray-200 font-bold">
+                    <th className="py-3 px-4">Account Holder</th>
+                    <th className="py-3 px-4">Role</th>
+                    <th className="py-3 px-4">Login Email / Username</th>
+                    <th className="py-3 px-4">Matric / Staff ID</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 font-medium">
+                  {(() => {
+                    const filtered = combinedAccounts.filter(acc => {
+                      if (userCredRoleFilter !== 'all' && acc.role !== userCredRoleFilter) return false;
+                      if (!userCredSearch) return true;
+                      const q = userCredSearch.toLowerCase().trim();
+                      return (
+                        acc.fullName.toLowerCase().includes(q) ||
+                        acc.email.toLowerCase().includes(q) ||
+                        (acc.matricNumber && acc.matricNumber.toLowerCase().includes(q))
+                      );
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-gray-400">
+                            No user accounts match the search or filter criteria.
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return filtered.map(acc => {
+                      const roleBadgeColor = 
+                        acc.role === 'student' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                        acc.role === 'super_admin' ? 'bg-red-100 text-red-800 border-red-200' :
+                        acc.role === 'lecturer' ? 'bg-orange-100 text-[#E8601C] border-orange-200' :
+                        acc.role === 'hod' ? 'bg-purple-100 text-purple-800 border-purple-200' :
+                        acc.role === 'exam_officer' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                        'bg-indigo-100 text-indigo-800 border-indigo-200';
+
+                      return (
+                        <tr key={acc.uid + acc.email} className="hover:bg-gray-50">
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-gray-900">{acc.fullName}</div>
+                            {acc.department && (
+                              <div className="text-[11px] text-gray-500">{acc.department}</div>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${roleBadgeColor} uppercase`}>
+                              {acc.role.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-gray-800">
+                            {acc.email}
+                          </td>
+                          <td className="py-3 px-4 font-mono font-bold text-gray-700">
+                            {acc.matricNumber || '—'}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
+                              Active
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCredentialUser(acc);
+                                setCredNewEmail(acc.email);
+                                setCredNewMatric(acc.matricNumber || '');
+                                setCredNewPass('');
+                                setShowCredPass(false);
+                              }}
+                              className="px-2.5 py-1.5 bg-[#FF6B0A] hover:bg-[#E8601C] text-white rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                              <span>Change Credentials</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -2923,6 +3158,146 @@ export const LecturerPortal: React.FC<IctUserPortalProps> = ({ activeTab, onSele
               semester={selectedSemester}
               onClose={() => setSelectedStudentForSlip(null)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ICT Change User Credentials Modal */}
+      {credentialUser && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-[#FF6B0A]" />
+                <h4 className="font-bold text-gray-900 text-sm">Change Login Credentials</h4>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setCredentialUser(null)} 
+                className="text-gray-400 hover:text-gray-600 cursor-pointer text-sm"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+              Updating login credentials for <strong className="text-gray-900">{credentialUser.fullName}</strong> ({credentialUser.role.replace('_', ' ').toUpperCase()}).
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                  Login Email / Username *
+                </label>
+                <input
+                  type="email"
+                  value={credNewEmail}
+                  onChange={(e) => setCredNewEmail(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-xs outline-none focus:border-[#FF6B0A] focus:bg-white font-mono"
+                  placeholder="user@metrolane.edu.ng"
+                />
+              </div>
+
+              {credentialUser.role === 'student' && (
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                    Matriculation Number (Student Login ID)
+                  </label>
+                  <input
+                    type="text"
+                    value={credNewMatric}
+                    onChange={(e) => setCredNewMatric(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-xs outline-none focus:border-[#FF6B0A] focus:bg-white font-mono font-bold"
+                    placeholder="26/MET/CHT/101"
+                  />
+                </div>
+              )}
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[11px] font-bold text-gray-700">New Password</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rand = `Metro@${Math.floor(1000 + Math.random() * 9000)}`;
+                      setCredNewPass(rand);
+                      setShowCredPass(true);
+                    }}
+                    className="text-[10px] text-[#FF6B0A] hover:underline font-bold cursor-pointer"
+                  >
+                    Generate Random
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showCredPass ? 'text' : 'password'}
+                    placeholder="Leave blank to keep existing password, or min 6 chars"
+                    value={credNewPass}
+                    onChange={(e) => setCredNewPass(e.target.value)}
+                    className="w-full p-2.5 pr-14 bg-gray-50 border border-gray-300 rounded-lg text-xs outline-none focus:border-[#FF6B0A] focus:bg-white font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCredPass(!showCredPass)}
+                    className="absolute right-2.5 top-2.5 text-[10px] text-gray-500 hover:text-gray-700 font-bold cursor-pointer"
+                  >
+                    {showCredPass ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setCredentialUser(null)}
+                className="px-3.5 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!credNewEmail.trim() || (credNewPass.length > 0 && credNewPass.length < 6)}
+                onClick={async () => {
+                  const targetEmail = credNewEmail.trim();
+                  const targetMatric = credNewMatric.trim() || undefined;
+                  const res = await updateUserCredentials(
+                    credentialUser.uid || credentialUser.email,
+                    targetEmail,
+                    credNewPass.trim() || undefined,
+                    {
+                      matricNumber: targetMatric,
+                      fullName: credentialUser.fullName,
+                      role: credentialUser.role as any
+                    }
+                  );
+
+                  // Update in DataContext users state
+                  await updateUser(credentialUser.uid, {
+                    email: targetEmail
+                  });
+
+                  // If student, also update students state
+                  if (credentialUser.role === 'student') {
+                    await updateStudent(credentialUser.uid, {
+                      email: targetEmail,
+                      ...(targetMatric ? { matricNumber: targetMatric } : {})
+                    });
+                  }
+
+                  setCredentialUser(null);
+                  setToast({
+                    id: Date.now().toString(),
+                    type: 'success',
+                    title: 'Credentials Updated',
+                    message: `Login credentials for ${credentialUser.fullName} updated successfully! Email: ${targetEmail}${credNewPass ? ` (New Password: ${credNewPass})` : ''}`
+                  });
+                }}
+                className="px-4 py-1.5 bg-[#FF6B0A] hover:bg-[#E8601C] text-white font-bold text-xs rounded-lg disabled:opacity-50 cursor-pointer shadow-xs"
+              >
+                Save Credentials
+              </button>
+            </div>
           </div>
         </div>
       )}
